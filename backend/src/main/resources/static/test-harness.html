@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ContentPipeline — Test Harness</title>
+<style>
+  :root { --bg:#0f1419; --panel:#1a212b; --line:#2b3542; --fg:#e6edf3; --muted:#8b98a5;
+          --ok:#3fb950; --err:#f85149; --accent:#58a6ff; --warn:#d29922; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; gap:16px;
+           align-items:center; flex-wrap:wrap; background:var(--panel); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header .sub { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:0; height:calc(100vh - 56px); }
+  @media (max-width: 900px){ main { grid-template-columns:1fr; height:auto; } }
+  .left { overflow:auto; padding:16px; border-right:1px solid var(--line); }
+  .right { display:flex; flex-direction:column; min-height:300px; }
+  fieldset { border:1px solid var(--line); border-radius:8px; margin:0 0 14px; padding:12px 14px; }
+  legend { color:var(--accent); font-weight:600; padding:0 6px; font-size:13px; }
+  label { display:block; color:var(--muted); font-size:12px; margin:8px 0 2px; }
+  input, select, textarea { width:100%; background:#0d1117; color:var(--fg); border:1px solid var(--line);
+         border-radius:6px; padding:7px 9px; font:inherit; }
+  textarea { resize:vertical; min-height:54px; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  button { cursor:pointer; background:#21262d; color:var(--fg); border:1px solid var(--line);
+           border-radius:6px; padding:7px 11px; font:inherit; font-weight:500; }
+  button:hover { border-color:var(--accent); }
+  button.go { background:var(--accent); color:#06223f; border-color:var(--accent); }
+  button.danger { border-color:#5c2326; }
+  button.danger:hover { background:#3d1416; }
+  .btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .state-grid { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; align-items:center; }
+  .state-grid label { margin:0; }
+  .right h2 { margin:0; padding:12px 16px; font-size:13px; border-bottom:1px solid var(--line);
+              background:var(--panel); display:flex; justify-content:space-between; align-items:center; }
+  #log { flex:1; overflow:auto; margin:0; padding:12px 16px; font-family:ui-monospace,Consolas,monospace;
+         font-size:12px; white-space:pre-wrap; word-break:break-word; }
+  .entry { border-bottom:1px solid var(--line); padding:8px 0; }
+  .entry .meta { color:var(--muted); }
+  .entry .m-GET{color:var(--accent)} .entry .m-POST{color:var(--ok)}
+  .entry .m-PUT{color:var(--warn)} .entry .m-DELETE{color:var(--err)} .entry .m-SSE{color:#bc8cff}
+  .status-ok { color:var(--ok); } .status-err { color:var(--err); }
+  .pill { font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:10px; padding:1px 8px; }
+  small.hint { color:var(--muted); font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ContentPipeline</h1><span class="sub">Backend test harness</span>
+  <span class="pill" id="conn">served same-origin</span>
+</header>
+<main>
+  <div class="left">
+
+    <fieldset>
+      <legend>Connection</legend>
+      <label>API base URL <small class="hint">(blank = same origin; set to http://localhost:8080 if you open this file directly)</small></label>
+      <input id="baseUrl" placeholder="(same origin)" />
+      <label>X-Dev-User-Id header</label>
+      <input id="userId" value="dev-user-001" />
+      <div class="btns">
+        <button class="go" onclick="health()">GET /actuator/health</button>
+        <button onclick="saveCfg()">Save</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Working state <small class="hint">(auto-filled from responses; editable)</small></legend>
+      <div class="state-grid">
+        <label>templateId</label><input id="templateId" />
+        <label>projectId</label><input id="projectId" />
+        <label>assetId</label><input id="assetId" />
+        <label>runId</label><input id="runId" />
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>1 · Templates</legend>
+      <div class="btns">
+        <button class="go" onclick="listTemplates()">List templates</button>
+        <button onclick="getTemplate()">Get by id</button>
+      </div>
+      <small class="hint">List auto-captures the first template id.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend>2 · Projects</legend>
+      <label>name</label><input id="projName" value="Demo project" />
+      <label>description</label><input id="projDesc" value="Created from the test harness" />
+      <div class="btns">
+        <button class="go" onclick="createProject()">Create</button>
+        <button onclick="listProjects()">List</button>
+        <button onclick="getProject()">Get</button>
+        <button onclick="updateProject()">Update name</button>
+        <button class="danger" onclick="deleteProject()">Delete</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>3 · Assets <small class="hint">(needs projectId)</small></legend>
+      <div class="row">
+        <div><label>name</label><input id="assetName" value="gameplay.mp4" /></div>
+        <div><label>assetType</label>
+          <select id="assetType">
+            <option>GAMEPLAY_VIDEO</option><option>BACKGROUND_MUSIC</option>
+            <option>FONT</option><option>IMAGE</option><option>OTHER</option>
+          </select></div>
+      </div>
+      <div class="row">
+        <div><label>contentType</label><input id="assetContentType" value="video/mp4" /></div>
+        <div><label>originalFilename</label><input id="assetFilename" value="gameplay.mp4" /></div>
+      </div>
+      <label>sizeBytes</label><input id="assetSize" value="1048576" />
+      <div class="btns">
+        <button class="go" onclick="createUploadUrl()">Create upload URL</button>
+        <button onclick="confirmUpload()">Confirm upload</button>
+        <button onclick="listAssets()">List</button>
+        <button onclick="getAsset()">Get</button>
+        <button onclick="downloadUrl()">Download URL</button>
+        <button class="danger" onclick="deleteAsset()">Delete</button>
+      </div>
+      <small class="hint">Confirm will 422 unless the object truly exists in R2 — expected without a real upload.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend>4 · Pipeline runs <small class="hint">(needs projectId + templateId)</small></legend>
+      <label>prompt</label>
+      <textarea id="runPrompt">A lonely lighthouse keeper discovers a message in a bottle.</textarea>
+      <div class="row">
+        <div><label>genre</label><input id="runGenre" value="mystery" /></div>
+        <div><label>tone</label><input id="runTone" value="hopeful" /></div>
+      </div>
+      <label>inputAssetIds <small class="hint">(JSON; e.g. {"gameplay":"&lt;assetId&gt;"} — optional)</small></label>
+      <input id="runAssets" placeholder='{}' />
+      <div class="btns">
+        <button class="go" onclick="createRun()">Create run</button>
+        <button onclick="listRuns()">List</button>
+        <button onclick="getRun()">Get</button>
+      </div>
+      <small class="hint">Without Temporal up, create may fail when starting the workflow — the run row is still persisted first.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend>5 · Live events (SSE)</legend>
+      <div class="btns">
+        <button class="go" onclick="openSse()">Open stream</button>
+        <button class="danger" onclick="closeSse()">Close</button>
+      </div>
+      <small class="hint">EventSource can't send custom headers, so SSE uses the default dev user (dev-user-001).</small>
+    </fieldset>
+
+  </div>
+
+  <div class="right">
+    <h2>Activity log <button onclick="clearLog()">clear</button></h2>
+    <div id="log"></div>
+  </div>
+</main>
+
+<script>
+// ---- config persistence ------------------------------------------------------
+const $ = id => document.getElementById(id);
+function loadCfg(){
+  $('baseUrl').value = localStorage.getItem('cp_base') || '';
+  $('userId').value  = localStorage.getItem('cp_user') || 'dev-user-001';
+}
+function saveCfg(){
+  localStorage.setItem('cp_base', $('baseUrl').value.trim());
+  localStorage.setItem('cp_user', $('userId').value.trim());
+  log('SSE','config','saved', true, {base:$('baseUrl').value||'(same origin)', user:$('userId').value});
+}
+loadCfg();
+
+// ---- logging -----------------------------------------------------------------
+function clearLog(){ $('log').innerHTML=''; }
+function log(method, path, status, ok, body){
+  const el = document.createElement('div');
+  el.className = 'entry';
+  const t = new Date().toLocaleTimeString();
+  const statusCls = ok ? 'status-ok' : 'status-err';
+  const bodyStr = body===undefined ? '' :
+     (typeof body === 'string' ? body : JSON.stringify(body, null, 2));
+  el.innerHTML =
+    `<div class="meta">${t} <span class="m-${method}">${method}</span> ${escapeHtml(path)} `+
+    `→ <span class="${statusCls}">${escapeHtml(String(status))}</span></div>`+
+    (bodyStr ? `<div>${escapeHtml(bodyStr)}</div>` : '');
+  $('log').prepend(el);
+}
+function escapeHtml(s){ return s.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+// ---- core fetch helper -------------------------------------------------------
+function base(){ return ($('baseUrl').value || '').replace(/\/+$/,''); }
+async function api(method, path, body){
+  const url = base() + path;
+  const headers = { 'X-Dev-User-Id': $('userId').value.trim() || 'dev-user-001' };
+  const opts = { method, headers };
+  if (body !== undefined){ headers['Content-Type']='application/json'; opts.body = JSON.stringify(body); }
+  try {
+    const res = await fetch(url, opts);
+    let data; const text = await res.text();
+    try { data = text ? JSON.parse(text) : ''; } catch { data = text; }
+    log(method, path, res.status, res.ok, data);
+    return { ok: res.ok, status: res.status, data };
+  } catch (e){
+    log(method, path, 'NETWORK ERROR', false, String(e) + '\n(If opened as a file, set API base to http://localhost:8080 and ensure CORS allows this origin.)');
+    return { ok:false, status:0, data:null };
+  }
+}
+const setIf = (id, v) => { if (v!==undefined && v!==null) $(id).value = v; };
+
+// ---- actions -----------------------------------------------------------------
+async function health(){ await api('GET','/actuator/health'); }
+
+async function listTemplates(){
+  const r = await api('GET','/api/v1/pipeline-templates');
+  if (r.ok && Array.isArray(r.data) && r.data.length) setIf('templateId', r.data[0].id);
+}
+async function getTemplate(){ await api('GET',`/api/v1/pipeline-templates/${$('templateId').value}`); }
+
+async function createProject(){
+  const r = await api('POST','/api/v1/projects',
+    { name:$('projName').value, description:$('projDesc').value });
+  if (r.ok) setIf('projectId', r.data.id);
+}
+async function listProjects(){ await api('GET','/api/v1/projects'); }
+async function getProject(){ await api('GET',`/api/v1/projects/${$('projectId').value}`); }
+async function updateProject(){
+  await api('PUT',`/api/v1/projects/${$('projectId').value}`, { name:$('projName').value });
+}
+async function deleteProject(){ await api('DELETE',`/api/v1/projects/${$('projectId').value}`); }
+
+const pid = () => $('projectId').value;
+async function createUploadUrl(){
+  const r = await api('POST',`/api/v1/projects/${pid()}/assets/upload-url`, {
+    name:$('assetName').value, assetType:$('assetType').value,
+    contentType:$('assetContentType').value, originalFilename:$('assetFilename').value,
+    sizeBytes: Number($('assetSize').value)
+  });
+  if (r.ok) setIf('assetId', r.data.assetId);
+}
+async function confirmUpload(){
+  await api('POST',`/api/v1/projects/${pid()}/assets/${$('assetId').value}/confirm-upload`,
+    { sizeBytes: Number($('assetSize').value) });
+}
+async function listAssets(){ await api('GET',`/api/v1/projects/${pid()}/assets`); }
+async function getAsset(){ await api('GET',`/api/v1/projects/${pid()}/assets/${$('assetId').value}`); }
+async function downloadUrl(){ await api('GET',`/api/v1/projects/${pid()}/assets/${$('assetId').value}/download-url`); }
+async function deleteAsset(){ await api('DELETE',`/api/v1/projects/${pid()}/assets/${$('assetId').value}`); }
+
+function parseAssets(){
+  const raw = $('runAssets').value.trim();
+  if (!raw) return undefined;
+  try { return JSON.parse(raw); } catch { log('POST','inputAssetIds','PARSE ERROR',false,'inputAssetIds must be valid JSON'); throw new Error('bad json'); }
+}
+async function createRun(){
+  let inputAssetIds;
+  try { inputAssetIds = parseAssets(); } catch { return; }
+  const body = {
+    pipelineTemplateId: $('templateId').value,
+    inputParams: { prompt:$('runPrompt').value, genre:$('runGenre').value, tone:$('runTone').value }
+  };
+  if (inputAssetIds) body.inputAssetIds = inputAssetIds;
+  const r = await api('POST',`/api/v1/projects/${pid()}/pipeline-runs`, body);
+  if (r.ok) setIf('runId', r.data.id);
+}
+async function listRuns(){ await api('GET',`/api/v1/projects/${pid()}/pipeline-runs`); }
+async function getRun(){ await api('GET',`/api/v1/projects/${pid()}/pipeline-runs/${$('runId').value}`); }
+
+// ---- SSE ---------------------------------------------------------------------
+let es = null;
+function openSse(){
+  closeSse();
+  const path = `/api/v1/projects/${pid()}/pipeline-runs/${$('runId').value}/events`;
+  es = new EventSource(base() + path);
+  log('SSE', path, 'OPENING', true);
+  es.addEventListener('pipeline-event', e => log('SSE', path, 'event', true, e.data));
+  es.onopen  = () => log('SSE', path, 'OPEN', true);
+  es.onerror = () => log('SSE', path, 'ERROR/closed', false, 'stream closed (run finished, 404, or CORS)');
+}
+function closeSse(){ if (es){ es.close(); log('SSE','(stream)','CLOSED', true); es=null; } }
+</script>
+</body>
+</html>
