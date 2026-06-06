@@ -1,5 +1,6 @@
 package com.contentpipeline.project.domain;
 
+import com.contentpipeline.asset.domain.Asset;
 import com.contentpipeline.common.model.BaseEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -30,8 +31,9 @@ public class Project extends BaseEntity {
     private ProjectStatus status = ProjectStatus.ACTIVE;
 
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Object> assets = new ArrayList<>();
+    private List<Asset> assets = new ArrayList<>();
 
+    public List<Asset> getAssets() { return assets; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }

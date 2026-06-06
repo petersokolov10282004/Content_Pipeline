@@ -1,0 +1,64 @@
+#!/bin/sh
+# Maven Wrapper bootstrap script
+# Downloads Maven if not already cached, then runs it.
+
+set -e
+
+die() {
+  echo "ERROR: $1" >&2
+  exit 1
+}
+
+# Resolve the directory this script lives in (handles symlinks)
+SCRIPT="$0"
+while [ -h "$SCRIPT" ]; do
+  ls_out=$(ls -ld "$SCRIPT")
+  link=$(expr "$ls_out" : '.*-> \(.*\)$')
+  case "$link" in
+    /*) SCRIPT="$link" ;;
+    *)  SCRIPT="$(dirname "$SCRIPT")/$link" ;;
+  esac
+done
+BASE_DIR=$(cd "$(dirname "$SCRIPT")" && pwd)
+
+PROPS="$BASE_DIR/.mvn/wrapper/maven-wrapper.properties"
+[ -f "$PROPS" ] || die "Cannot find $PROPS"
+
+# Parse distributionUrl from properties (handle Windows line endings)
+DIST_URL=$(grep '^distributionUrl=' "$PROPS" | sed 's/^distributionUrl=//' | tr -d '\r')
+[ -n "$DIST_URL" ] || die "distributionUrl not found in $PROPS"
+
+# Derive a cache directory name from the zip filename
+DIST_FILENAME=$(basename "$DIST_URL")
+MAVEN_USER_HOME="${MAVEN_USER_HOME:-$HOME/.m2}"
+DIST_DIR="$MAVEN_USER_HOME/wrapper/dists/${DIST_FILENAME%.zip}"
+
+MVN_BIN="$DIST_DIR/bin/mvn"
+
+if [ ! -f "$MVN_BIN" ]; then
+  echo "Downloading Maven: $DIST_URL"
+  TMP_ZIP="$DIST_DIR.zip"
+  mkdir -p "$DIST_DIR"
+
+  if command -v curl > /dev/null 2>&1; then
+    curl --fail --location --silent --show-error -o "$TMP_ZIP" "$DIST_URL" \
+      || die "curl download failed: $DIST_URL"
+  elif command -v wget > /dev/null 2>&1; then
+    wget --quiet -O "$TMP_ZIP" "$DIST_URL" \
+      || die "wget download failed: $DIST_URL"
+  else
+    die "Neither curl nor wget is available. Please install one of them."
+  fi
+
+  # Unzip into a temp dir, then move the single top-level directory contents
+  TMP_UNZIP=$(mktemp -d)
+  unzip -q "$TMP_ZIP" -d "$TMP_UNZIP"
+  EXTRACTED=$(find "$TMP_UNZIP" -maxdepth 1 -mindepth 1 -type d | head -1)
+  [ -n "$EXTRACTED" ] || die "Could not find extracted Maven directory"
+  cp -r "$EXTRACTED/." "$DIST_DIR/"
+  rm -rf "$TMP_UNZIP" "$TMP_ZIP"
+  chmod +x "$DIST_DIR/bin/mvn"
+  echo "Maven installed to $DIST_DIR"
+fi
+
+exec "$MVN_BIN" -f "$BASE_DIR/pom.xml" "$@"

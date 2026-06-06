@@ -1,9 +1,13 @@
 package com.contentpipeline.config;
 
+import com.contentpipeline.workflow.PipelineActivitiesImpl;
+import com.contentpipeline.workflow.StoryPipelineWorkflowImpl;
+import com.contentpipeline.workflow.WorkflowStarter;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowClientOptions;
 import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
+import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -37,7 +41,13 @@ public class TemporalConfig {
     }
 
     @Bean
-    public WorkerFactory workerFactory(WorkflowClient client) {
-        return WorkerFactory.newInstance(client);
+    public WorkerFactory workerFactory(WorkflowClient client,
+                                       PipelineActivitiesImpl activities) {
+        WorkerFactory factory = WorkerFactory.newInstance(client);
+        Worker worker = factory.newWorker(WorkflowStarter.TASK_QUEUE);
+        worker.registerWorkflowImplementationTypes(StoryPipelineWorkflowImpl.class);
+        worker.registerActivitiesImplementations(activities);
+        factory.start();
+        return factory;
     }
 }

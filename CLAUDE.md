@@ -7,43 +7,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ContentPipeline is a **generic content automation pipeline platform**. It is not a single-purpose video tool — new pipeline types are added by implementing `PipelineStepHandler` + a Temporal Workflow without touching existing code. The first pipeline implemented is a short-form story gameplay video: prompt → AI script → AI subtitles → FFmpeg render → YouTube upload.
 
 Monorepo layout:
-- `backend/` — Spring Boot 3.3 / Java 21 / Maven
-- `frontend/` — Next.js 14 App Router / TypeScript / TailwindCSS
-- `docker-compose.yml` — PostgreSQL 16 + Temporal server + UI
+- `backend/` — Spring Boot 3.3 / Java 21 / Maven (also has a `Dockerfile`)
+- `frontend/` — Next.js 14 App Router / TypeScript / TailwindCSS (not containerized — runs via Node)
+- `docker-compose.yml` — PostgreSQL 16 + Temporal server + UI + backend (+ Redis via profile)
+
+**Build status:** Phases 1–3 complete and verified running in Docker. Phase 4 (Claude step handlers, SSE wiring, run-status transitions) is next. A pipeline run currently starts, is submitted to Temporal, and fails at the first step with `No step handler registered for GENERATE_STORY` — expected until Phase 4 adds the handlers.
 
 ## Development Commands
 
-### Infrastructure (required before running backend)
+### Running the whole app (Docker)
+The compose plugin on this machine (Ubuntu 24.04) is **`docker-compose-v2`** (install: `sudo apt install docker-compose-v2`), invoked as `docker compose` (space, not hyphen).
 ```bash
-docker-compose up -d                  # start PostgreSQL + Temporal
-docker-compose --profile redis up -d  # also start Redis (optional, Phase 3+)
+docker compose up -d                   # start Postgres + Temporal + Temporal UI + backend
+docker compose up -d --build backend   # rebuild & restart backend after Java changes
+docker compose --profile redis up -d   # also start Redis (optional)
+docker compose ps                      # status (Postgres shows "healthy")
+docker compose logs -f backend         # follow backend logs (look for "Started ContentPipelineApplication")
+docker compose down                    # stop all (DB volume survives); add -v to wipe data
 ```
-Temporal UI is at http://localhost:8088.
+- Temporal UI: http://localhost:8088 · API health: http://localhost:8080/actuator/health
+- Compose overrides `DB_URL`/`TEMPORAL_HOST` to Docker service names, so the `.env` `localhost` values are only used when running the backend outside Docker.
+- The **frontend is not in Docker.** Run it separately (see Frontend section), then open http://localhost:3000.
 
 ### Backend
+There is **no system `mvn` and no system `java` toolchain on PATH for Maven** — use the committed `backend/mvnw` wrapper (it downloads Maven 3.9.9 to `~/.m2/wrapper` on first run). Java 21 is installed.
 ```bash
 cd backend
-./mvnw spring-boot:run                          # run with dev defaults
+./mvnw spring-boot:run                          # run with dev defaults (needs infra up)
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=prod  # prod profile
 ./mvnw clean package                            # build JAR
+./mvnw clean package -DskipTests                # build JAR, skip tests
 ./mvnw test                                     # all tests
 ./mvnw test -Dtest=SomeTestClass                # single test class
 ./mvnw test -Dtest=SomeTestClass#methodName     # single test method
 ./mvnw flyway:info                              # check migration status
 ```
+A clean `mvn package` can pass while the app still fails **at startup** (e.g. bean wiring, lazy loading) — after backend changes, verify by booting (`docker compose up -d --build backend` then check the logs), not just compiling.
 
 ### Frontend
+There is **no system `node`/`npm`/`npx` on PATH.** Use Cursor's bundled Node v22 at `/usr/share/cursor/resources/app/resources/helpers/node`. Dependencies are already installed (`node_modules` present, installed via a bootstrapped npm). Run scripts by calling the binaries directly:
 ```bash
 cd frontend
-npm install          # first-time setup
-npm run dev          # dev server on :3000
-npm run build        # production build
-npm run type-check   # tsc --noEmit (no compilation output)
-npm run lint         # eslint
+NODE=/usr/share/cursor/resources/app/resources/helpers/node
+"$NODE" node_modules/.bin/next dev          # dev server on :3000
+"$NODE" node_modules/.bin/next build        # production build
+"$NODE" node_modules/typescript/bin/tsc --noEmit   # type-check
+"$NODE" node_modules/.bin/next lint         # eslint
 ```
+This project targets **Next 14**: config is `next.config.mjs` (NOT `.ts` — TS config needs Next 15), and fonts come from `next/font/google` names available in 14 (e.g. `Inter`, not `Geist`).
 
 ### Environment
-Copy `.env.example` to `.env` and fill in credentials before running. Required for backend: `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `ANTHROPIC_API_KEY`. Frontend reads `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8080`).
+Copy `.env.example` to `.env` (Docker Compose reads it via `env_file`). The backend **boots fine with blank credentials** — they're only exercised when a pipeline actually calls out: `ANTHROPIC_API_KEY` (Phase 4 Claude steps), `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_ENDPOINT` (asset upload/render). Fill them when testing those flows. Frontend reads `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8080`).
+
+Controllers resolve the caller from the `X-Dev-User-Id` header, defaulting to `dev-user-001` (`common/model/DevUser`) — the frontend `lib/api/client.ts` sends the same value, so curl (header-less) and the UI see the same data.
 
 ## Architecture
 
@@ -79,6 +95,10 @@ Pipelines run as Temporal workflows (`workflow/StoryPipelineWorkflowImpl.java`).
 - Long-running steps (render, upload) use Temporal heartbeats to indicate liveness.
 - The `RenderVideoStepHandler` does **not** run FFmpeg inline — it creates a `RenderJob` record and returns. The Temporal Activity (`RenderVideoActivity`) polls for completion while the `FfmpegRenderWorker` (`@Scheduled`) claims and processes the job.
 
+**Worker wiring (deliberate):** we use only the core `temporal-sdk` dependency, **not** `temporal-spring-boot-starter`. The starter eagerly connects to Temporal and starts workers at boot (and reads `spring.temporal.*`), which breaks startup when Temporal isn't reachable. Instead `config/TemporalConfig.java` creates the `WorkflowServiceStubs`/`WorkflowClient` (lazy stubs) and, in the `workerFactory` bean, registers `StoryPipelineWorkflowImpl` + `PipelineActivitiesImpl` on the `story-pipeline` task queue and calls `factory.start()`. New workflows/activities are registered there.
+
+**Run lifecycle:** `PipelineRunService.create` persists the `PipelineRun` + all `PipelineStepRun` rows (PENDING) *before* starting Temporal, so the IDs exist when the workflow queries them. The ordered step-run IDs are passed to the workflow via `WorkflowInput`. `PipelineActivitiesImpl.executeStep` marks a step RUNNING, runs the handler, then COMPLETED — and on **any** exception marks it FAILED (never leaves it RUNNING). Note: nothing yet flips `PipelineRun.status` to COMPLETED/STEP_FAILED after the workflow ends — that callback is a Phase 4 task.
+
 ### Artifact Polymorphism
 
 All artifact types share a single `artifacts` table (`SINGLE_TABLE` JPA inheritance, `artifact_type` discriminator column). Subtypes: `SCRIPT`, `SUBTITLE`, `RENDER_CONFIG`, `RENDERED_VIDEO`, `PUBLISH_CONFIG`, `PUBLISH_RESULT`. Each subtype's columns are sparse (null for other types). Adding a new artifact type = new `@Entity @DiscriminatorValue("X") class XArtifact extends Artifact`.
@@ -90,6 +110,8 @@ Assets and rendered videos are stored in R2 (S3-compatible). The PostgreSQL enti
 R2 key conventions:
 - Assets: `assets/{projectId}/{assetId}/{filename}`
 - Renders: `renders/{projectId}/{runId}/{stepRunId}/{uuid}.mp4`
+
+**HTTP client (deliberate):** AWS SDK 2.46 defaults its sync client to Apache HttpClient 5.4+, which conflicts with the 5.3.x that Spring Boot 3.3.4 manages (`ClassNotFoundException: TlsSocketStrategy`). So the `s3` dependency excludes `apache-client`/`apache5-client`, `url-connection-client` is added, and `StorageConfig` sets `.httpClient(UrlConnectionHttpClient.create())` on the `S3Client`. The `S3Presigner` needs no HTTP client (it only signs). The asset upload key is generated *after* the row is flushed (to get the assetId) since `storage_key` is `NOT NULL`; client-supplied filenames are sanitized into the key.
 
 ### Real-time Updates: SSE
 
@@ -128,6 +150,8 @@ Feature-package (vertical slice) layout under `com.contentpipeline`:
 ### Database
 
 Flyway migrations in `backend/src/main/resources/db/migration/`. Current: `V1__init_schema.sql` (all tables). JPA `ddl-auto` is `validate` — the schema must exist before the app starts. Never set `ddl-auto=update` in this project; always write a new `V{n}__description.sql` migration instead.
+
+**Lazy-loading rule (`open-in-view: false`):** because Open-Session-In-View is disabled, a lazy `@OneToMany`/`@ManyToOne` accessed *outside* a transaction throws `LazyInitializationException` (HTTP 500). Any `*Response.from(entity)` mapper that touches a lazy association must either (a) run inside a `@Transactional(readOnly = true)` service method, or (b) be fed an entity loaded with `@EntityGraph(attributePaths = ...)`. Controllers that map entities to DTOs directly from a repository (e.g. `PipelineTemplateController`) rely on `@EntityGraph` finders. Prefer keeping mapping inside the `@Transactional` service.
 
 ### Frontend Data Flow
 

@@ -20,9 +20,9 @@
 
   <properties>
     <java.version>21</java.version>
-    <temporal.version>1.24.1</temporal.version>
-    <anthropic.version>0.8.0</anthropic.version>
-    <aws.sdk.version>2.26.27</aws.sdk.version>
+    <temporal.version>1.30.1</temporal.version>
+    <anthropic.version>2.37.0</anthropic.version>
+    <aws.sdk.version>2.46.5</aws.sdk.version>
   </properties>
 
   <dependencies>
@@ -49,6 +49,11 @@
       <optional>true</optional>
     </dependency>
 
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+
     <!-- ─── Database ─────────────────────────────────────────────────── -->
     <dependency>
       <groupId>org.postgresql</groupId>
@@ -70,21 +75,28 @@
       <artifactId>temporal-sdk</artifactId>
       <version>${temporal.version}</version>
     </dependency>
-    <dependency>
-      <groupId>io.temporal</groupId>
-      <artifactId>temporal-spring-boot-starter-alpha</artifactId>
-      <version>${temporal.version}</version>
-    </dependency>
 
     <!-- ─── AWS SDK v2 (for Cloudflare R2 — S3-compatible) ──────────── -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>s3</artifactId>
       <version>${aws.sdk.version}</version>
+      <!-- SDK 2.46 defaults to Apache HttpClient 5.4+, which conflicts with the
+           5.3.x that Spring Boot manages. Use url-connection-client instead. -->
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache5-client</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
-      <artifactId>s3-presigner</artifactId>
+      <artifactId>url-connection-client</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
 
