@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: contentpipeline-postgres
+    environment:
+      POSTGRES_DB: contentpipeline
+      POSTGRES_USER: contentpipeline
+      POSTGRES_PASSWORD: contentpipeline
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contentpipeline"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.24
+    container_name: contentpipeline-temporal
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=contentpipeline
+      - POSTGRES_PWD=contentpipeline
+      - POSTGRES_SEEDS=postgres
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: contentpipeline-temporal-ui
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+    ports:
+      - "8088:8080"
+    depends_on:
+      - temporal
+
+  redis:
+    image: redis:7-alpine
+    container_name: contentpipeline-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+    profiles:
+      - redis
+
+volumes:
+  postgres_data:

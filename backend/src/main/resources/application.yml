@@ -1,0 +1,91 @@
+spring:
+  application:
+    name: contentpipeline
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/contentpipeline}
+    username: ${DB_USERNAME:contentpipeline}
+    password: ${DB_PASSWORD:contentpipeline}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+  mvc:
+    async:
+      request-timeout: 120000
+
+server:
+  port: 8080
+  compression:
+    enabled: true
+
+# ─── Temporal ─────────────────────────────────────────────────────────────────
+temporal:
+  host: ${TEMPORAL_HOST:localhost:7233}
+  namespace: ${TEMPORAL_NAMESPACE:default}
+  task-queues:
+    story-pipeline: story-pipeline
+
+# ─── Cloudflare R2 ────────────────────────────────────────────────────────────
+storage:
+  r2:
+    account-id: ${R2_ACCOUNT_ID:}
+    access-key-id: ${R2_ACCESS_KEY_ID:}
+    secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+    bucket: ${R2_BUCKET_NAME:contentpipeline-dev}
+    endpoint: ${R2_ENDPOINT:}
+    region: auto
+
+# ─── Anthropic ────────────────────────────────────────────────────────────────
+anthropic:
+  api-key: ${ANTHROPIC_API_KEY:}
+
+# ─── Render ───────────────────────────────────────────────────────────────────
+render:
+  ffmpeg:
+    path: ${RENDER_FFMPEG_PATH:/usr/bin/ffmpeg}
+  temp-dir: ${RENDER_TEMP_DIR:/tmp/contentpipeline/renders}
+  worker:
+    poll-interval-ms: 5000
+    claim-timeout-minutes: 60
+
+# ─── CORS (dev) ───────────────────────────────────────────────────────────────
+cors:
+  allowed-origins: "http://localhost:3000,http://localhost:3001"
+
+# ─── Actuator ─────────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    show-sql: false
