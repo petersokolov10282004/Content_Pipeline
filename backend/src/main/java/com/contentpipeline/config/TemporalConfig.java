@@ -13,15 +13,20 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/*Allegedly temporal is a way to make long running programs keep running 
+even in crashes so a temporal worker is just given tasks and a server coordinates them  */
+
 @Configuration
 public class TemporalConfig {
-
+    /*“Set temporalHost to the config value named temporal.host.
+    But if that value does not exist, use localhost:7233 as the default. */
     @Value("${temporal.host:localhost:7233}")
     private String temporalHost;
 
     @Value("${temporal.namespace:default}")
     private String namespace;
 
+    //This is a factoru for 
     @Bean
     public WorkflowServiceStubs workflowServiceStubs() {
         return WorkflowServiceStubs.newServiceStubs(

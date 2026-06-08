@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 
+
+/* this describes the configuration of the video like fps, res */
 @Entity
 @DiscriminatorValue("RENDER_CONFIG")
 public class RenderConfigArtifact extends Artifact {

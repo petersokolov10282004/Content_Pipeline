@@ -1,7 +1,7 @@
 package com.contentpipeline.common.storage;
 
 import java.io.InputStream;
-
+//An interfae for the storage we use
 public interface StorageService {
 
     /**

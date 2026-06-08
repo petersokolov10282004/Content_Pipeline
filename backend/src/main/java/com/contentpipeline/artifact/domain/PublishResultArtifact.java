@@ -6,6 +6,9 @@ import jakarta.persistence.Entity;
 
 import java.time.Instant;
 
+/* This returns the results of the video publication,
+This can be usefull if trying to figure out if video was properly published when it was published
+where to watch and if errors exist what errors*/
 @Entity
 @DiscriminatorValue("PUBLISH_RESULT")
 public class PublishResultArtifact extends Artifact {

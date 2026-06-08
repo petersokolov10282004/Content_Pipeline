@@ -1,0 +1,8 @@
+I want to figure out if I can have a personall llm generate the scripts 
+It should be small but also reasobaly powerfull 4-8B antrhopic is overkill
+and it wastes my precius tokens
+
+//Should probs review the temporalConfig factories at the bottom
+
+//Security config a lil overkill for now 
+

@@ -11,6 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
+//Litterly all the objects that exist artifact asse, project, Pipeline.
 @MappedSuperclass
 public abstract class BaseEntity {
 

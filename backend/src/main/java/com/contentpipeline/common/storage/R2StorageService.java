@@ -14,7 +14,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import java.io.InputStream;
 import java.time.Duration;
-
+// This is implementation of out current storage  uses amazons3 and 
 @Service
 public class R2StorageService implements StorageService {
 

@@ -8,9 +8,14 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
-    @Value("${cors.allowed-origins:http://localhost:3000}")
+    //either the allowed origin in data base or local host if default
+    @Value("${cors.allowed-origins:http://localhost:3000}") 
     private String allowedOrigins;
 
+
+    //Cors is cross-origin resource sharing
+    //basicly for figuring out who can call back end
+    //The 2 methods pretty much just add rules, addCors uses add mapping
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")

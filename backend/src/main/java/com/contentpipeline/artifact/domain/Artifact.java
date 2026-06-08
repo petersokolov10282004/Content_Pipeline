@@ -15,6 +15,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+
+/*This class is used for mapping artifact to the database object and allows use to use
+java for database communication */
 @Entity
 @Table(name = "artifacts")
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)

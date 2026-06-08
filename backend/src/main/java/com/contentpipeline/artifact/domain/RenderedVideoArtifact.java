@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 
+
+//Desribes where the video is stored how big it is and other meta data about it
 @Entity
 @DiscriminatorValue("RENDERED_VIDEO")
 public class RenderedVideoArtifact extends Artifact {

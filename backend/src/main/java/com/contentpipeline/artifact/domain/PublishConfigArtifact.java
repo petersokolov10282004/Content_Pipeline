@@ -3,18 +3,20 @@ package com.contentpipeline.artifact.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
+/*this essentially just instructions on uploading the artifact */
 
 @Entity
-@DiscriminatorValue("PUBLISH_CONFIG")
+@DiscriminatorValue("PUBLISH_CONFIG") //Used for descriminating between different
+//Artifact children.
 public class PublishConfigArtifact extends Artifact {
 
-    @Column(name = "pub_title", length = 512)
+    @Column(name = "pub_title", length = 512) //Title of video
     private String title;
 
-    @Column(name = "pub_description", columnDefinition = "TEXT")
+    @Column(name = "pub_description", columnDefinition = "TEXT") //vid desc
     private String description;
 
-    @Column(name = "pub_tags", columnDefinition = "TEXT")
+    @Column(name = "pub_tags", columnDefinition = "TEXT") //tags to publiush with
     private String tags;
 
     @Column(length = 50)

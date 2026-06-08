@@ -11,6 +11,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+
+//This is logic for how backend pushes its changes to front end
+//For now I will be replacing this with a simple html server so will get into it later
+
+
 /**
  * Per-run SSE emitter registry.
  * Temporal workflow implementations call {@link #emit} to push events to connected frontends.
