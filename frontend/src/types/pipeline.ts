@@ -31,25 +31,31 @@ export type PipelineRunEvent =
   | { type: "RUN_FAILED"; error: string; timestamp: string };
 
 export interface PipelineStepState {
-  step: PipelineStepName;
+  id: string;
+  stepOrder: number;
+  stepHandlerKey: PipelineStepName;
+  stepName: string;
   status: StepRunStatus;
   startedAt: string | null;
   completedAt: string | null;
-  artifactId: string | null;
+  attemptNumber: number;
   errorMessage: string | null;
 }
 
 export interface PipelineRunSummary {
   id: string;
-  title: string | null;
+  projectId: string;
+  pipelineTemplateId: string;
+  templateName: string | null;
   status: PipelineRunStatus;
-  currentStep: PipelineStepName | null;
+  temporalWorkflowId: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface PipelineRunDetail extends PipelineRunSummary {
-  prompt: string;
   steps: PipelineStepState[];
 }
 

@@ -5,6 +5,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatRelative } from "@/lib/utils/formatters";
 import { useDefaultProjectForPipeline, usePipelineRun } from "@/hooks/usePipelines";
+import { usePipelineEvents } from "@/hooks/usePipelineEvents";
 import type { StepRunStatus } from "@/types/pipeline";
 
 const stepStatusIcon: Record<StepRunStatus, string> = {
@@ -28,6 +29,7 @@ const stepStatusColor: Record<StepRunStatus, string> = {
 export default function PipelineRunPage({ params }: { params: { runId: string } }) {
   const { data: project } = useDefaultProjectForPipeline();
   const { data: run, isLoading } = usePipelineRun(project?.id, params.runId);
+  usePipelineEvents(project?.id, params.runId, run?.status);
 
   if (isLoading || !project) {
     return (
@@ -65,29 +67,32 @@ export default function PipelineRunPage({ params }: { params: { runId: string } 
       <div className="rounded-lg border bg-white p-6">
         <h2 className="mb-4 text-sm font-semibold text-gray-700">Steps</h2>
         <ol className="space-y-4">
-          {run.steps?.map((step) => (
-            <li key={step.step} className="flex items-start gap-3">
-              <span className={`mt-0.5 font-mono text-lg leading-none ${stepStatusColor[step.status]}`}>
-                {stepStatusIcon[step.status]}
-              </span>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-900">
-                    {step.step.replace(/_/g, " ")}
-                  </span>
-                  <StatusBadge status={step.status} size="sm" />
+          {run.steps?.map((step) => {
+            const label = step.stepName ?? step.stepHandlerKey?.replace(/_/g, " ") ?? "Step";
+            return (
+              <li key={step.id} className="flex items-start gap-3">
+                <span className={`mt-0.5 font-mono text-lg leading-none ${stepStatusColor[step.status]}`}>
+                  {stepStatusIcon[step.status]}
+                </span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-900">
+                      {label}
+                    </span>
+                    <StatusBadge status={step.status} size="sm" />
+                  </div>
+                  {step.errorMessage && (
+                    <p className="mt-1 text-xs text-red-600">{step.errorMessage}</p>
+                  )}
                 </div>
-                {step.errorMessage && (
-                  <p className="mt-1 text-xs text-red-600">{step.errorMessage}</p>
-                )}
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ol>
       </div>
 
       <p className="mt-4 text-center text-xs text-gray-400">
-        Live step updates via SSE — wired in Phase 4
+        Live updates via SSE
       </p>
     </div>
   );

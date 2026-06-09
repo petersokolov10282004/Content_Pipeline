@@ -53,8 +53,8 @@ export default function PipelinesPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Run</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Step</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Started</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Created</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
@@ -65,14 +65,14 @@ export default function PipelinesPage() {
                       href={`/pipelines/${run.id}`}
                       className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
                     >
-                      {run.title ?? run.id.slice(0, 8)}
+                      {run.templateName ?? run.id.slice(0, 8)}
                     </Link>
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge status={run.status} size="sm" />
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {run.currentStep?.replace(/_/g, " ") ?? "—"}
+                    {run.startedAt ? formatRelative(run.startedAt) : "—"}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {formatRelative(run.createdAt)}

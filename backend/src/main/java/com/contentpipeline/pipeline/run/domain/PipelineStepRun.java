@@ -35,6 +35,13 @@ public class PipelineStepRun extends BaseEntity {
     private Instant startedAt;
     private Instant completedAt;
 
+    /** Free-text execution phase within the step (e.g. RUNNING_FFMPEG). Updated via progress reports. */
+    @Column(length = 100)
+    private String phase;
+
+    /** Bumped on each phase change; a stale value indicates a stuck step. */
+    private Instant lastHeartbeatAt;
+
     @Column(nullable = false)
     private Integer attemptNumber = 1;
 
@@ -56,6 +63,10 @@ public class PipelineStepRun extends BaseEntity {
     public void setStartedAt(Instant startedAt) { this.startedAt = startedAt; }
     public Instant getCompletedAt() { return completedAt; }
     public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
+    public String getPhase() { return phase; }
+    public void setPhase(String phase) { this.phase = phase; }
+    public Instant getLastHeartbeatAt() { return lastHeartbeatAt; }
+    public void setLastHeartbeatAt(Instant lastHeartbeatAt) { this.lastHeartbeatAt = lastHeartbeatAt; }
     public Integer getAttemptNumber() { return attemptNumber; }
     public void setAttemptNumber(Integer attemptNumber) { this.attemptNumber = attemptNumber; }
     public String getErrorMessage() { return errorMessage; }

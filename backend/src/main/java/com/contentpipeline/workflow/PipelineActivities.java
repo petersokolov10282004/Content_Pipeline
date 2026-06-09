@@ -32,4 +32,8 @@ public interface PipelineActivities {
         Map<String, UUID> inputArtifacts,
         Map<String, UUID> inputAssets
     );
+
+    /** Flip the PipelineRun status to COMPLETED or STEP_FAILED when the workflow finishes. */
+    @ActivityMethod
+    void completeRun(UUID pipelineRunId, boolean success);
 }

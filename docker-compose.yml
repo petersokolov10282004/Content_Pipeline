@@ -60,6 +60,16 @@ services:
         condition: service_started
     restart: on-failure
 
+  frontend:
+    build: ./frontend
+    container_name: contentpipeline-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+    depends_on:
+      - backend
+
   redis:
     image: redis:7-alpine
     container_name: contentpipeline-redis

@@ -29,28 +29,36 @@ public class StoryPipelineWorkflowImpl implements StoryPipelineWorkflow {
         Map<String, UUID> artifacts = new HashMap<>();
         Map<String, UUID> assets = new HashMap<>(input.inputAssets());
 
-        // Step 1: Generate story script → "script"
-        Map<String, UUID> out1 = activities.executeStep(
-            runId, input.stepRunIds().get(0), "GENERATE_STORY",
-            Map.copyOf(artifacts), Map.copyOf(assets));
-        artifacts.putAll(out1);
+        try {
+            // Step 1: Generate story script → "script"
+            Map<String, UUID> out1 = activities.executeStep(
+                runId, input.stepRunIds().get(0), "GENERATE_STORY",
+                Map.copyOf(artifacts), Map.copyOf(assets));
+            artifacts.putAll(out1);
 
-        // Step 2: Generate subtitles → "subtitles"
-        Map<String, UUID> out2 = activities.executeStep(
-            runId, input.stepRunIds().get(1), "GENERATE_SUBTITLES",
-            Map.copyOf(artifacts), Map.copyOf(assets));
-        artifacts.putAll(out2);
+            // Step 2: Generate subtitles → "subtitles"
+            Map<String, UUID> out2 = activities.executeStep(
+                runId, input.stepRunIds().get(1), "GENERATE_SUBTITLES",
+                Map.copyOf(artifacts), Map.copyOf(assets));
+            artifacts.putAll(out2);
 
-        // Step 3: Render video → "renderedVideo"
-        Map<String, UUID> out3 = activities.executeStep(
-            runId, input.stepRunIds().get(2), "RENDER_VIDEO",
-            Map.copyOf(artifacts), Map.copyOf(assets));
-        artifacts.putAll(out3);
+            // Step 3: Render video → "renderedVideo"
+            Map<String, UUID> out3 = activities.executeStep(
+                runId, input.stepRunIds().get(2), "RENDER_VIDEO",
+                Map.copyOf(artifacts), Map.copyOf(assets));
+            artifacts.putAll(out3);
 
-        // Step 4: Upload to YouTube → "publishResult"
-        Map<String, UUID> out4 = activities.executeStep(
-            runId, input.stepRunIds().get(3), "UPLOAD_VIDEO",
-            Map.copyOf(artifacts), Map.copyOf(assets));
-        artifacts.putAll(out4);
+            // Step 4: Upload to YouTube → "publishResult"
+            Map<String, UUID> out4 = activities.executeStep(
+                runId, input.stepRunIds().get(3), "UPLOAD_VIDEO",
+                Map.copyOf(artifacts), Map.copyOf(assets));
+            artifacts.putAll(out4);
+
+            activities.completeRun(runId, true);
+
+        } catch (Exception e) {
+            activities.completeRun(runId, false);
+            throw e;
+        }
     }
 }

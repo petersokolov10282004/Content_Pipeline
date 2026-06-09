@@ -37,12 +37,12 @@ export function usePipelineRun(projectId: string | undefined, runId: string | un
     queryKey: pipelineKeys.run(projectId ?? "none", runId ?? "none"),
     queryFn: () => runsApi.get(projectId!, runId!),
     enabled: !!projectId && !!runId,
+    // SSE events (usePipelineEvents) invalidate this query in real time.
+    // Keep a slow fallback poll so the page recovers if the SSE connection is absent.
     refetchInterval: (query) => {
-      // Poll every 3s while the run is still active so the page stays fresh
-      // even without SSE. Phase 4 will replace polling with SSE invalidation.
       const status = query.state.data?.status;
       if (!status) return false;
-      return status === "RUNNING" || status === "PENDING" ? 3000 : false;
+      return status === "RUNNING" || status === "PENDING" ? 15_000 : false;
     },
   });
 }

@@ -14,5 +14,6 @@ public record StepContext(
     Map<String, UUID> inputArtifactIds,  // e.g. "script" → artifactId, "subtitles" → artifactId
     Map<String, UUID> inputAssetIds,     // e.g. "gameplay" → assetId
     Map<String, String> stepConfig,      // from PipelineStepDefinition.configJson (deserialized)
-    String devUserId                     // placeholder → replaced by real userId from JWT later
+    String devUserId,                    // placeholder → replaced by real userId from JWT later
+    StepProgress progress                // report intra-step phase for observability
 ) {}

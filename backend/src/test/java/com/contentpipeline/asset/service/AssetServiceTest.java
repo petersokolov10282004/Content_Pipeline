@@ -2,6 +2,7 @@ package com.contentpipeline.asset.service;
 
 import com.contentpipeline.asset.api.dto.AssetResponse;
 import com.contentpipeline.asset.api.dto.ConfirmUploadRequest;
+import com.contentpipeline.asset.api.dto.DownloadUrlResponse;
 import com.contentpipeline.asset.api.dto.CreateUploadUrlRequest;
 import com.contentpipeline.asset.api.dto.UploadUrlResponse;
 import com.contentpipeline.asset.domain.Asset;
@@ -186,6 +187,53 @@ class AssetServiceTest {
             .isInstanceOf(PipelineException.class)
             .hasMessageContaining("Upload not found in storage");
         assertThat(asset.getStatus()).isEqualTo(AssetStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("downloadUrl: presigns a GET for the owned asset's key with the 60-minute expiry and reports a matching expiresAt")
+    void downloadUrlHappyPath() {
+        Asset asset = new Asset();
+        UUID assetId = UUID.randomUUID();
+        ReflectionTestUtils.setField(asset, "id", assetId);
+        asset.setProject(project);
+        asset.setStorageBucket("test-bucket");
+        asset.setStorageKey("assets/%s/%s/clip.mp4".formatted(projectId, assetId));
+
+        when(projectService.requireOwnedProject(userId, projectId)).thenReturn(project);
+        when(assetRepository.findById(assetId)).thenReturn(Optional.of(asset));
+        when(storageService.generatePresignedDownloadUrl("test-bucket", asset.getStorageKey(), 60))
+            .thenReturn("https://r2/presigned-get");
+
+        java.time.Instant before = java.time.Instant.now();
+        DownloadUrlResponse response = assetService.downloadUrl(userId, projectId, assetId);
+        java.time.Instant after = java.time.Instant.now();
+
+        assertThat(response.downloadUrl()).isEqualTo("https://r2/presigned-get");
+        // expiresAt is "now + 60m"; bound it by the call window so a wrong duration is caught.
+        assertThat(response.expiresAt())
+            .isBetween(before.plus(java.time.Duration.ofMinutes(60)),
+                       after.plus(java.time.Duration.ofMinutes(60)));
+        verify(storageService).generatePresignedDownloadUrl("test-bucket", asset.getStorageKey(), 60);
+    }
+
+    @Test
+    @DisplayName("downloadUrl: an asset under a different project surfaces as 404 and no presign is requested")
+    void downloadUrlRejectsCrossProjectAccess() {
+        Project otherProject = new Project();
+        otherProject.setOwnerIdentifier(userId);
+        ReflectionTestUtils.setField(otherProject, "id", UUID.randomUUID());
+
+        Asset asset = new Asset();
+        UUID assetId = UUID.randomUUID();
+        ReflectionTestUtils.setField(asset, "id", assetId);
+        asset.setProject(otherProject);
+
+        when(projectService.requireOwnedProject(userId, projectId)).thenReturn(project);
+        when(assetRepository.findById(assetId)).thenReturn(Optional.of(asset));
+
+        assertThatThrownBy(() -> assetService.downloadUrl(userId, projectId, assetId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(storageService, never()).generatePresignedDownloadUrl(anyString(), anyString(), anyInt());
     }
 
     @Test

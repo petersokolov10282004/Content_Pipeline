@@ -16,14 +16,27 @@ import java.net.URI;
 @EnableConfigurationProperties(StorageProperties.class)
 public class StorageConfig {
 
+    // The AWS SDK rejects blank access keys at construction time, which would crash
+    // startup when R2 isn't configured. We fall back to a placeholder so the beans
+    // instantiate and the app boots; any actual R2 call will fail with an auth error
+    // (the intended behavior until real credentials are supplied).
+    private static final String PLACEHOLDER = "unconfigured";
+
+    private static StaticCredentialsProvider credentials(StorageProperties props) {
+        String accessKey = blankToPlaceholder(props.accessKeyId());
+        String secretKey = blankToPlaceholder(props.secretAccessKey());
+        return StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey));
+    }
+
+    private static String blankToPlaceholder(String value) {
+        return (value == null || value.isBlank()) ? PLACEHOLDER : value;
+    }
+
     @Bean
     public S3Client s3Client(StorageProperties props) {
-        var credentials = StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(props.accessKeyId(), props.secretAccessKey())
-        );
         var builder = S3Client.builder()
             .httpClient(UrlConnectionHttpClient.create())
-            .credentialsProvider(credentials)
+            .credentialsProvider(credentials(props))
             .region(Region.of(props.region() != null ? props.region() : "auto"))
             .forcePathStyle(true);
 
@@ -35,11 +48,8 @@ public class StorageConfig {
 
     @Bean
     public S3Presigner s3Presigner(StorageProperties props) {
-        var credentials = StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(props.accessKeyId(), props.secretAccessKey())
-        );
         var builder = S3Presigner.builder()
-            .credentialsProvider(credentials)
+            .credentialsProvider(credentials(props))
             .region(Region.of(props.region() != null ? props.region() : "auto"));
 
         if (props.endpoint() != null && !props.endpoint().isBlank()) {

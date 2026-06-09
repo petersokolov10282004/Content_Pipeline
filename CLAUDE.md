@@ -11,7 +11,7 @@ Monorepo layout:
 - `frontend/` — Next.js 14 App Router / TypeScript / TailwindCSS (not containerized — runs via Node)
 - `docker-compose.yml` — PostgreSQL 16 + Temporal server + UI + backend (+ Redis via profile)
 
-**Build status:** Phases 1–3 complete and verified running in Docker. Phase 4 (Claude step handlers, SSE wiring, run-status transitions) is next. A pipeline run currently starts, is submitted to Temporal, and fails at the first step with `No step handler registered for GENERATE_STORY` — expected until Phase 4 adds the handlers.
+**Build status:** Phases 1–4 complete. All four story step handlers exist and run synchronously; SSE events (incl. `STEP_PROGRESS`) and run-status transitions are wired. Story/subtitle generation is currently **stubbed** (hardcoded text — see `TODO(llm)` in the two handlers) so the pipeline runs without `ANTHROPIC_API_KEY`. Render runs **real FFmpeg** (binary is in the backend image) and needs R2 credentials + an uploaded gameplay asset to succeed; YouTube upload is **mocked** (writes a MOCK `PublishResultArtifact`). Without R2/gameplay, a run fails *loudly* at the render step (never hangs).
 
 ## Development Commands
 
@@ -89,15 +89,16 @@ No changes to any existing class.
 
 ### Workflow Engine: Temporal
 
-Pipelines run as Temporal workflows (`workflow/StoryPipelineWorkflowImpl.java`). Each step is a Temporal Activity. This is intentional — FFmpeg renders take minutes, YouTube uploads are large transfers. Temporal provides crash recovery, retry with backoff, and per-step visibility via its UI.
+Pipelines run as Temporal workflows (`workflow/StoryPipelineWorkflowImpl.java`). Each step is a Temporal Activity. Temporal provides crash recovery, retry with backoff, and per-step visibility via its UI.
 
-- Workers run in the same JVM as the API server (Phase 1). They can be extracted to a separate process later.
-- Long-running steps (render, upload) use Temporal heartbeats to indicate liveness.
-- The `RenderVideoStepHandler` does **not** run FFmpeg inline — it creates a `RenderJob` record and returns. The Temporal Activity (`RenderVideoActivity`) polls for completion while the `FfmpegRenderWorker` (`@Scheduled`) claims and processes the job.
+- Workers run in the same JVM as the API server. They can be extracted to a separate process later.
+- **Steps run synchronously inside the activity** (current model). `RenderVideoStepHandler` downloads the gameplay asset from R2, runs FFmpeg, uploads the MP4 back to R2, and returns `{"renderedVideo": <artifactId>}` — all inline. `UploadVideoStepHandler` does a mock YouTube upload inline. There is **no** async job/worker/polling layer: the old `RenderJob`/`UploadJob` queued-work design and its imaginary `FfmpegRenderWorker`/`@Scheduled` workers were never implemented and have been removed. Extracting long steps back into async workers (with Temporal heartbeats) is a future optimization, not the current design — don't reintroduce `RenderJob`/`UploadJob`.
 
 **Worker wiring (deliberate):** we use only the core `temporal-sdk` dependency, **not** `temporal-spring-boot-starter`. The starter eagerly connects to Temporal and starts workers at boot (and reads `spring.temporal.*`), which breaks startup when Temporal isn't reachable. Instead `config/TemporalConfig.java` creates the `WorkflowServiceStubs`/`WorkflowClient` (lazy stubs) and, in the `workerFactory` bean, registers `StoryPipelineWorkflowImpl` + `PipelineActivitiesImpl` on the `story-pipeline` task queue and calls `factory.start()`. New workflows/activities are registered there.
 
-**Run lifecycle:** `PipelineRunService.create` persists the `PipelineRun` + all `PipelineStepRun` rows (PENDING) *before* starting Temporal, so the IDs exist when the workflow queries them. The ordered step-run IDs are passed to the workflow via `WorkflowInput`. `PipelineActivitiesImpl.executeStep` marks a step RUNNING, runs the handler, then COMPLETED — and on **any** exception marks it FAILED (never leaves it RUNNING). Note: nothing yet flips `PipelineRun.status` to COMPLETED/STEP_FAILED after the workflow ends — that callback is a Phase 4 task.
+**Run lifecycle:** `PipelineRunService.create` persists the `PipelineRun` + all `PipelineStepRun` rows (PENDING) *before* starting Temporal, so the IDs exist when the workflow queries them. The ordered step-run IDs are passed to the workflow via `WorkflowInput`. `PipelineActivitiesImpl.executeStep` marks a step RUNNING, runs the handler, then COMPLETED — and on **any** exception marks it FAILED (never leaves it RUNNING). The workflow calls `completeRun(success)` at the end, which flips `PipelineRun.status` to COMPLETED or STEP_FAILED and closes the SSE stream.
+
+**Step observability (debugging):** each `PipelineStepRun` carries a `phase` string + `lastHeartbeatAt` timestamp. A handler reports progress via `StepContext.progress().report("RUNNING_FFMPEG")`, which updates the step row and emits an SSE `STEP_PROGRESS` event. This makes it visible *where inside a step* execution is — a stale `lastHeartbeatAt` means a stuck step, and the `phase` pinpoints the stall (e.g. `DOWNLOADING_GAMEPLAY` vs `UPLOADING_RENDER`). The `StoryPipelineWorkflowImplTest` (Temporal `TestWorkflowEnvironment`) asserts the workflow always terminates and that `renderedVideo` flows from render into upload — a regression/anti-deadlock guard.
 
 ### Artifact Polymorphism
 
