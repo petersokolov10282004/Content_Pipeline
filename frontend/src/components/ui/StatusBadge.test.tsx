@@ -2,37 +2,31 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { StatusBadge } from "./StatusBadge";
 
-/**
- * StatusBadge renders both run-level and step-level statuses through a shared style
- * map. The key risk is an unmapped status value (e.g. a new backend enum) — the badge
- * must fall back to a neutral style and still render its label, never crash.
- */
 describe("StatusBadge", () => {
-  it("renders a known status with its label, underscores spaced", () => {
+  it("renders STEP_FAILED with the friendly label", () => {
     render(<StatusBadge status="STEP_FAILED" />);
-    expect(screen.getByText("STEP FAILED")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
   });
 
-  it("renders every documented run and step status without throwing", () => {
-    const statuses = [
-      "PENDING",
-      "RUNNING",
-      "AWAITING_INPUT",
-      "COMPLETED",
-      "STEP_FAILED",
-      "FAILED",
-      "CANCELLED",
-      "SKIPPED",
-    ] as const;
-    for (const s of statuses) {
-      const { unmount } = render(<StatusBadge status={s} />);
-      expect(screen.getByText(s.replace(/_/g, " "))).toBeInTheDocument();
+  it("renders every documented status without throwing", () => {
+    const cases: Array<[Parameters<typeof StatusBadge>[0]["status"], string]> = [
+      ["PENDING",        "Pending"],
+      ["RUNNING",        "Running"],
+      ["AWAITING_INPUT", "Waiting"],
+      ["COMPLETED",      "Completed"],
+      ["STEP_FAILED",    "Failed"],
+      ["FAILED",         "Failed"],
+      ["CANCELLED",      "Cancelled"],
+      ["SKIPPED",        "Skipped"],
+    ];
+    for (const [status, label] of cases) {
+      const { unmount } = render(<StatusBadge status={status} />);
+      expect(screen.getByText(label)).toBeInTheDocument();
       unmount();
     }
   });
 
-  it("falls back to a neutral style for an unmapped status value", () => {
-    // Cast through unknown: simulates a backend value the union doesn't know yet.
+  it("falls back gracefully for an unmapped status value", () => {
     render(<StatusBadge status={"WEIRD_NEW_STATUS" as never} />);
     const el = screen.getByText("WEIRD NEW STATUS");
     expect(el.className).toContain("bg-gray-100");
@@ -40,7 +34,7 @@ describe("StatusBadge", () => {
 
   it("applies the small size variant", () => {
     render(<StatusBadge status="RUNNING" size="sm" />);
-    const el = screen.getByText("RUNNING");
+    const el = screen.getByText("Running");
     expect(el.className).toContain("text-xs");
   });
 });

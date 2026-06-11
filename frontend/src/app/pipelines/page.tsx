@@ -4,6 +4,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MonoLabel } from "@/components/ui/MonoLabel";
 import { formatRelative } from "@/lib/utils/formatters";
 import { useDefaultProjectForPipeline, usePipelineRuns } from "@/hooks/usePipelines";
 
@@ -16,67 +17,57 @@ export default function PipelinesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-7 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pipeline Runs</h1>
-          <p className="mt-1 text-sm text-gray-500">All your content generation runs</p>
+          <MonoLabel className="text-slate-400 block mb-1">History</MonoLabel>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Pipeline Runs</h1>
         </div>
         <Link
           href="/pipelines/new"
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent hover:bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors"
         >
-          New Run
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M6.5 2v9M2 6.5h9" stroke="white" strokeWidth="1.75" strokeLinecap="round"/>
+          </svg>
+          New run
         </Link>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16 text-gray-400">
-          <Spinner className="h-6 w-6" />
-        </div>
+        <div className="flex justify-center py-20"><Spinner className="h-5 w-5 text-slate-400" /></div>
       ) : runs.length === 0 ? (
         <EmptyState
           title="No runs yet"
           description="Start your first pipeline run to generate a video."
           action={
-            <Link
-              href="/pipelines/new"
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-            >
-              New Run
+            <Link href="/pipelines/new" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 transition-colors">
+              New run
             </Link>
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Run</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Started</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Created</th>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/60">
+                {["Run ID", "Status", "Started", "Created"].map((h) => (
+                  <th key={h} className="px-5 py-3 text-left">
+                    <MonoLabel className="text-slate-400">{h}</MonoLabel>
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-slate-100">
               {runs.map((run) => (
-                <tr key={run.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <Link
-                      href={`/pipelines/${run.id}`}
-                      className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-                    >
-                      {run.templateName ?? run.id.slice(0, 8)}
+                <tr key={run.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-5 py-3.5">
+                    <Link href={`/pipelines/${run.id}`} className="font-mono text-xs bg-slate-100 hover:bg-blue-50 hover:text-accent px-2 py-1 rounded transition-colors text-slate-700">
+                      {run.id.slice(0, 12)}
                     </Link>
                   </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={run.status} size="sm" />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {run.startedAt ? formatRelative(run.startedAt) : "—"}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {formatRelative(run.createdAt)}
-                  </td>
+                  <td className="px-5 py-3.5"><StatusBadge status={run.status} size="sm" /></td>
+                  <td className="px-5 py-3.5"><MonoLabel className="text-slate-500">{run.startedAt ? formatRelative(run.startedAt) : "—"}</MonoLabel></td>
+                  <td className="px-5 py-3.5"><MonoLabel className="text-slate-500">{formatRelative(run.createdAt)}</MonoLabel></td>
                 </tr>
               ))}
             </tbody>

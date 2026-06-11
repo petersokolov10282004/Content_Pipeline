@@ -65,7 +65,7 @@ public class DataInitializer implements ApplicationRunner {
         template.getSteps().add(step(template, 3,
             "RENDER_VIDEO",
             "Render Video",
-            "Creates a RenderJob; FfmpegRenderWorker claims it and produces a 1080×1920 MP4.",
+            "Runs FFmpeg synchronously to produce a 1080×1920 MP4 and uploads it to R2.",
             """
             {
               "width": 1080,

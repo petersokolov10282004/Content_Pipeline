@@ -2,12 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
 :root {
-  --background: #f9fafb;
-  --foreground: #111827;
+  /* Ink palette — dark navy canvas */
+  --ink-950: #080c14;
+  --ink-900: #0d1320;
+  --ink-800: #131b2e;
+  --ink-700: #1c2740;
+  --ink-600: #263352;
+  --ink-400: #4a5d7a;
+  --ink-300: #6b7fa0;
+  --ink-200: #8fa3c4;
+  --ink-100: #c4d0e6;
+  --ink-50:  #eef2f9;
+
+  /* Accent */
+  --accent:     #3b82f6;
+  --accent-dim: #1d4ed8;
+
+  /* Functional surfaces */
+  --surface:        #ffffff;
+  --surface-subtle: #f8fafc;
+  --border:         #e2e8f0;
+  --border-subtle:  #f1f5f9;
+
+  /* Foreground */
+  --fg-primary:   #0f172a;
+  --fg-secondary: #475569;
+  --fg-muted:     #94a3b8;
 }
 
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { height: 100%; }
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  height: 100%;
+  background: var(--surface-subtle);
+  color: var(--fg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ── Grid overlay utility ───────────────────────────────────────────────────── */
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Corner tick marks ──────────────────────────────────────────────────────── */
+.tick::before,
+.tick::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: rgba(255,255,255,0.2);
+  border-style: solid;
+}
+.tick-tl::before { top: 12px; left: 12px; border-width: 1px 0 0 1px; }
+.tick-br::after  { bottom: 12px; right: 12px; border-width: 0 1px 1px 0; }

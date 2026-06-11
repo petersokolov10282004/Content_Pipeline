@@ -62,6 +62,7 @@ class PipelineActivitiesImplTest {
     @Mock private StepHandlerRegistry handlerRegistry;
     @Mock private PipelineStepHandler handler;
     @Mock private SseEmitterRegistry sseEmitterRegistry;
+    @Mock private StepProgressService stepProgressService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private PipelineActivitiesImpl activities;
@@ -76,7 +77,7 @@ class PipelineActivitiesImplTest {
 
     @BeforeEach
     void setUp() {
-        activities = new PipelineActivitiesImpl(runRepository, stepRunRepository, handlerRegistry, objectMapper, sseEmitterRegistry);
+        activities = new PipelineActivitiesImpl(runRepository, stepRunRepository, handlerRegistry, objectMapper, sseEmitterRegistry, stepProgressService);
 
         Project project = new Project();
         setId(project, projectId);
