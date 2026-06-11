@@ -48,9 +48,16 @@ public class StorageConfig {
 
     @Bean
     public S3Presigner s3Presigner(StorageProperties props) {
+        // Match the S3Client: path-style addressing (bucket in the path, not a
+        // subdomain). Virtual-host style would sign URLs like
+        // http://<bucket>.<host>/... which don't resolve against S3-compatible
+        // stores (MinIO, and R2's account endpoint) without extra DNS setup.
         var builder = S3Presigner.builder()
             .credentialsProvider(credentials(props))
-            .region(Region.of(props.region() != null ? props.region() : "auto"));
+            .region(Region.of(props.region() != null ? props.region() : "auto"))
+            .serviceConfiguration(software.amazon.awssdk.services.s3.S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .build());
 
         if (props.endpoint() != null && !props.endpoint().isBlank()) {
             builder.endpointOverride(URI.create(props.endpoint()));

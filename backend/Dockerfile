@@ -13,6 +13,9 @@ RUN mvn package -Dmaven.test.skip=true -q
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# FFmpeg is required by the RENDER_VIDEO step (installs to /usr/bin/ffmpeg, matching RENDER_FFMPEG_PATH).
+RUN apk add --no-cache ffmpeg
+
 RUN addgroup -S app && adduser -S app -G app
 USER app
 

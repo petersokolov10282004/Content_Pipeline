@@ -7,10 +7,7 @@ import com.contentpipeline.pipeline.handler.StepProgress;
 import com.contentpipeline.pipeline.handler.StepResult;
 import com.contentpipeline.pipeline.run.domain.PipelineRun;
 import com.contentpipeline.pipeline.run.domain.PipelineRunStatus;
-import com.contentpipeline.pipeline.run.domain.PipelineStepRun;
-import com.contentpipeline.pipeline.run.domain.StepRunStatus;
 import com.contentpipeline.pipeline.run.repository.PipelineRunRepository;
-import com.contentpipeline.pipeline.run.repository.PipelineStepRunRepository;
 import com.contentpipeline.steps.registry.StepHandlerRegistry;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,30 +27,29 @@ public class PipelineActivitiesImpl implements PipelineActivities {
     private static final Logger log = LoggerFactory.getLogger(PipelineActivitiesImpl.class);
 
     private final PipelineRunRepository runRepository;
-    private final PipelineStepRunRepository stepRunRepository;
     private final StepHandlerRegistry handlerRegistry;
     private final ObjectMapper objectMapper;
     private final SseEmitterRegistry sseEmitterRegistry;
     private final StepProgressService stepProgressService;
+    private final StepRunLifecycle stepRunLifecycle;
 
     public PipelineActivitiesImpl(
         PipelineRunRepository runRepository,
-        PipelineStepRunRepository stepRunRepository,
         StepHandlerRegistry handlerRegistry,
         ObjectMapper objectMapper,
         SseEmitterRegistry sseEmitterRegistry,
-        StepProgressService stepProgressService
+        StepProgressService stepProgressService,
+        StepRunLifecycle stepRunLifecycle
     ) {
         this.runRepository = runRepository;
-        this.stepRunRepository = stepRunRepository;
         this.handlerRegistry = handlerRegistry;
         this.objectMapper = objectMapper;
         this.sseEmitterRegistry = sseEmitterRegistry;
         this.stepProgressService = stepProgressService;
+        this.stepRunLifecycle = stepRunLifecycle;
     }
 
     @Override
-    @Transactional
     public Map<String, UUID> executeStep(
         UUID pipelineRunId,
         UUID stepRunId,
@@ -61,15 +57,11 @@ public class PipelineActivitiesImpl implements PipelineActivities {
         Map<String, UUID> inputArtifacts,
         Map<String, UUID> inputAssets
     ) {
-        PipelineStepRun stepRun = stepRunRepository.findById(stepRunId)
-            .orElseThrow(() -> Activity.wrap(new IllegalStateException("StepRun not found: " + stepRunId)));
-
-        PipelineRun run = runRepository.findById(pipelineRunId)
-            .orElseThrow(() -> Activity.wrap(new IllegalStateException("PipelineRun not found: " + pipelineRunId)));
-
-        stepRun.setStatus(StepRunStatus.RUNNING);
-        stepRun.setStartedAt(Instant.now());
-        stepRunRepository.save(stepRun);
+        // Each status transition commits in its own transaction (via StepRunLifecycle) so the
+        // step_runs row is never held locked across the handler run. This is what lets progress
+        // phases persist mid-step and a FAILED status survive the rethrow below. Intentionally
+        // NOT @Transactional: the handler does its own (independently committed) persistence.
+        StepRunLifecycle.StepStartInfo info = stepRunLifecycle.markRunningAndLoad(stepRunId, pipelineRunId);
 
         sseEmitterRegistry.emit(pipelineRunId, Map.of(
             "type", "STEP_STARTED",
@@ -77,8 +69,7 @@ public class PipelineActivitiesImpl implements PipelineActivities {
             "timestamp", Instant.now().toString()
         ));
 
-        Map<String, String> stepConfig = deserializeConfig(
-            stepRun.getStepDefinition().getConfigJson());
+        Map<String, String> stepConfig = deserializeConfig(info.configJson());
 
         StepProgress progress = phase ->
             stepProgressService.report(pipelineRunId, stepRunId, stepHandlerKey, phase);
@@ -86,7 +77,7 @@ public class PipelineActivitiesImpl implements PipelineActivities {
         StepContext context = new StepContext(
             pipelineRunId,
             stepRunId,
-            run.getProject().getId(),
+            info.projectId(),
             inputArtifacts,
             inputAssets,
             stepConfig,
@@ -98,9 +89,7 @@ public class PipelineActivitiesImpl implements PipelineActivities {
             PipelineStepHandler handler = handlerRegistry.getRequired(stepHandlerKey);
             StepResult result = handler.execute(context);
 
-            stepRun.setStatus(StepRunStatus.COMPLETED);
-            stepRun.setCompletedAt(Instant.now());
-            stepRunRepository.save(stepRun);
+            stepRunLifecycle.markCompleted(stepRunId);
 
             sseEmitterRegistry.emit(pipelineRunId, Map.of(
                 "type", "STEP_COMPLETED",
@@ -114,10 +103,7 @@ public class PipelineActivitiesImpl implements PipelineActivities {
             // Covers StepExecutionException, missing-handler PipelineException, and
             // any unexpected runtime failure — the step must never be left RUNNING.
             log.error("Step {} failed for run {}: {}", stepHandlerKey, pipelineRunId, e.getMessage());
-            stepRun.setStatus(StepRunStatus.FAILED);
-            stepRun.setCompletedAt(Instant.now());
-            stepRun.setErrorMessage(e.getMessage());
-            stepRunRepository.save(stepRun);
+            stepRunLifecycle.markFailed(stepRunId, e.getMessage());
 
             sseEmitterRegistry.emit(pipelineRunId, Map.of(
                 "type", "STEP_FAILED",

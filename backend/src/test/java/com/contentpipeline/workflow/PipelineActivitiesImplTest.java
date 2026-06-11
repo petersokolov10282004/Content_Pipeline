@@ -77,7 +77,11 @@ class PipelineActivitiesImplTest {
 
     @BeforeEach
     void setUp() {
-        activities = new PipelineActivitiesImpl(runRepository, stepRunRepository, handlerRegistry, objectMapper, sseEmitterRegistry, stepProgressService);
+        // Real StepRunLifecycle over the mocked repositories: it owns the RUNNING/COMPLETED/FAILED
+        // writes (each its own transaction in production), so the existing findById/save stubs and
+        // the shared stepRun entity still drive the status assertions below.
+        StepRunLifecycle stepRunLifecycle = new StepRunLifecycle(stepRunRepository, runRepository);
+        activities = new PipelineActivitiesImpl(runRepository, handlerRegistry, objectMapper, sseEmitterRegistry, stepProgressService, stepRunLifecycle);
 
         Project project = new Project();
         setId(project, projectId);

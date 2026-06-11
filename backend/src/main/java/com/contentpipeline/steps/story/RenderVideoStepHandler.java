@@ -84,6 +84,9 @@ public class RenderVideoStepHandler implements PipelineStepHandler {
 
         Path workDir = null;
         try {
+            // The configured temp dir (e.g. /tmp/contentpipeline/renders) may not exist yet
+            // in a fresh container; createTempDirectory requires its parent to be present.
+            Files.createDirectories(Path.of(tempDir));
             workDir = Files.createTempDirectory(Path.of(tempDir), "render-" + context.pipelineStepRunId());
 
             context.progress().report("DOWNLOADING_GAMEPLAY");
@@ -139,10 +142,17 @@ public class RenderVideoStepHandler implements PipelineStepHandler {
             .replace("\\", "\\\\")
             .replace(":", "\\:");
 
+        // Fit the source into a 1080x1920 vertical frame (scale down preserving aspect,
+        // pad the rest), then burn the subtitles onto that final canvas. Without this the
+        // output keeps the source resolution while the artifact metadata claims 1080x1920.
+        String videoFilter = "scale=1080:1920:force_original_aspect_ratio=decrease,"
+            + "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,"
+            + "subtitles=" + subtitlePath;
+
         ProcessBuilder pb = new ProcessBuilder(
             ffmpegPath,
             "-i", gameplay.toAbsolutePath().toString(),
-            "-vf", "subtitles=" + subtitlePath,
+            "-vf", videoFilter,
             "-c:v", "libx264",
             "-crf", "23",
             "-preset", "fast",
